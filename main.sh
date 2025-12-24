@@ -137,10 +137,10 @@ main() {
     # If command doesn't need Docker, skip all Docker setup
     if [[ "$cmd_requirements" == "none" ]]; then
         # Dispatch the command directly and exit
-        dispatch_command "${CLI_SCRIPT_COMMAND}" "${CLI_PASS_THROUGH[@]}" "${CLI_CONTROL_FLAGS[@]}"
+        dispatch_command "${CLI_SCRIPT_COMMAND}" ${CLI_PASS_THROUGH[@]+"${CLI_PASS_THROUGH[@]}"} ${CLI_CONTROL_FLAGS[@]+"${CLI_CONTROL_FLAGS[@]}"}
         exit $?
     fi
-    
+
     # Step 5: Docker checks
     local docker_status
     docker_status=$(check_docker; echo $?)
@@ -299,7 +299,7 @@ main() {
         local cmd_req=$(get_command_requirements "${CLI_SCRIPT_COMMAND}")
         # Only run pre-flight for commands that need Docker or image
         if [[ "$cmd_req" == "docker" ]] || [[ "$cmd_req" == "image" ]]; then
-            if ! preflight_check "${CLI_SCRIPT_COMMAND}" "${CLI_PASS_THROUGH[@]}"; then
+            if ! preflight_check "${CLI_SCRIPT_COMMAND}" ${CLI_PASS_THROUGH[@]+"${CLI_PASS_THROUGH[@]}"}; then
                 # Pre-flight check failed and printed error
                 exit 1
             fi
@@ -353,7 +353,7 @@ main() {
                 local docker_profiles=()
                 local python_only_profiles=("python" "ml" "datascience")
                 
-                for profile in "${current_profiles[@]}"; do
+                for profile in ${current_profiles[@]+"${current_profiles[@]}"}; do
                     local is_python_only=false
                     for py_profile in "${python_only_profiles[@]}"; do
                         if [[ "$profile" == "$py_profile" ]]; then
@@ -426,7 +426,7 @@ main() {
     if [[ -n "${CLI_SCRIPT_COMMAND}" ]]; then
         # Script command - dispatch on host
         # Pass control flags and pass-through args to dispatch_command
-        dispatch_command "${CLI_SCRIPT_COMMAND}" "${CLI_PASS_THROUGH[@]}" "${CLI_CONTROL_FLAGS[@]}"
+        dispatch_command "${CLI_SCRIPT_COMMAND}" ${CLI_PASS_THROUGH[@]+"${CLI_PASS_THROUGH[@]}"} ${CLI_CONTROL_FLAGS[@]+"${CLI_CONTROL_FLAGS[@]}"}
         exit $?
     else
         # No script command - running Claude interactively
@@ -472,7 +472,7 @@ main() {
             # Check if stdin is not a terminal (i.e., we're receiving piped input)
             # and -p/--print flag isn't already present
             local has_print_flag=false
-            for arg in "${CLI_PASS_THROUGH[@]}"; do
+            for arg in ${CLI_PASS_THROUGH[@]+"${CLI_PASS_THROUGH[@]}"}; do
                 if [[ "$arg" == "-p" ]] || [[ "$arg" == "--print" ]]; then
                     has_print_flag=true
                     break
@@ -495,9 +495,9 @@ main() {
                 fi
                 local piped_input
                 piped_input=$(cat)
-                run_claudebox_container "$container_name" "interactive" "${CLI_CONTROL_FLAGS[@]}" "-p" "$piped_input" "${CLI_PASS_THROUGH[@]}"
+                run_claudebox_container "$container_name" "interactive" ${CLI_CONTROL_FLAGS[@]+"${CLI_CONTROL_FLAGS[@]}"} "-p" "$piped_input" ${CLI_PASS_THROUGH[@]+"${CLI_PASS_THROUGH[@]}"}
             else
-                run_claudebox_container "$container_name" "interactive" "${CLI_CONTROL_FLAGS[@]}" "${CLI_PASS_THROUGH[@]}"
+                run_claudebox_container "$container_name" "interactive" ${CLI_CONTROL_FLAGS[@]+"${CLI_CONTROL_FLAGS[@]}"} ${CLI_PASS_THROUGH[@]+"${CLI_PASS_THROUGH[@]}"}
             fi
         else
             show_no_slots_menu
@@ -537,7 +537,7 @@ build_docker_image() {
         done < <(read_profile_section "$profiles_file" "profiles")
         
         # Generate profile installations
-        for profile in "${current_profiles[@]}"; do
+        for profile in ${current_profiles[@]+"${current_profiles[@]}"}; do
             profile=$(echo "$profile" | tr -d '[:space:]')
             [[ -z "$profile" ]] && continue
             
@@ -552,7 +552,7 @@ build_docker_image() {
         local docker_profiles=()
         local python_only_profiles=("python" "ml" "datascience")
         
-        for profile in "${current_profiles[@]}"; do
+        for profile in ${current_profiles[@]+"${current_profiles[@]}"}; do
             local is_python_only=false
             for py_profile in "${python_only_profiles[@]}"; do
                 if [[ "$profile" == "$py_profile" ]]; then
@@ -587,21 +587,14 @@ LABEL claudebox.project=\"$project_folder_name\""
     
     # Replace placeholders in the project template
     local final_dockerfile="$base_dockerfile"
-    
-    # Replace WHOLE lines that contain the placeholders (with optional spaces)
-    local final_dockerfile
-    final_dockerfile=$(awk -v pi="$profile_installations" -v lbs="$labels" '
-    # If the whole line is {{ PROFILE_INSTALLATIONS }}, print injected block and skip
-    /^[[:space:]]*\{\{[[:space:]]*PROFILE_INSTALLATIONS[[:space:]]*\}\}[[:space:]]*$/ { print pi; next }
-    # If the whole line is {{ LABELS }}, print labels block and skip
-    /^[[:space:]]*\{\{[[:space:]]*LABELS[[:space:]]*\}\}[[:space:]]*$/ { print lbs; next }
-    # Otherwise, print the line unchanged
-    { print }
-    ' <<<"$base_dockerfile") || error "Failed to apply Dockerfile substitutions"
+
+    # Replace placeholders using sed (simpler and handles newlines better)
+    final_dockerfile="${base_dockerfile//\{\{PROFILE_INSTALLATIONS\}\}/$profile_installations}"
+    final_dockerfile="${final_dockerfile//\{\{LABELS\}\}/$labels}"
 
     # Guard: ensure no unreplaced placeholders remain
-    if grep -q '{{PROFILE_INSTALLATIONS}}' <<<"$final_dockerfile" grep -q '{{LABELS}}' <<<"$final_dockerfile"; then
-    error "Unreplaced placeholders remain in generated Dockerfile"
+    if grep -q '{{PROFILE_INSTALLATIONS}}' <<<"$final_dockerfile" || grep -q '{{LABELS}}' <<<"$final_dockerfile"; then
+        error "Unreplaced placeholders remain in generated Dockerfile"
     fi
 
     printf '%s' "$final_dockerfile" > "$dockerfile"

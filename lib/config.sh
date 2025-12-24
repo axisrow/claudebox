@@ -130,7 +130,7 @@ read_profile_section() {
         done < <(sed -n "/^\[$section\]/,/^\[/p" "$profile_file" | tail -n +2 | grep -v '^\[')
     fi
 
-    printf '%s\n' "${result[@]}"
+    printf '%s\n' ${result[@]+"${result[@]}"}
 }
 
 update_profile_section() {
