@@ -11,10 +11,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare Dockerfile (remove template placeholders)
+      - name: Prepare build context
         run: |
+          # Remove template placeholders from Dockerfile
           sed -i 's/{{PROFILE_INSTALLATIONS}}//g' build/Dockerfile
           sed -i 's/{{LABELS}}/LABEL claudebox.type="core"/g' build/Dockerfile
+          # Copy required files to build context
+          cp build/docker-entrypoint build/docker-entrypoint.sh
+          cp lib/tools-report.sh build/tools-report.sh
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
