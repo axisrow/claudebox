@@ -11,6 +11,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Prepare Dockerfile (remove template placeholders)
+        run: |
+          sed -i 's/{{PROFILE_INSTALLATIONS}}//g' build/Dockerfile
+          sed -i 's/{{LABELS}}/LABEL claudebox.type="core"/g' build/Dockerfile
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -27,5 +32,11 @@ jobs:
           file: ./build/Dockerfile
           push: true
           tags: axisrow/claudebox-core:latest
+          build-args: |
+            USER_ID=1000
+            GROUP_ID=1000
+            USERNAME=claude
+            NODE_VERSION=--lts
+            DELTA_VERSION=0.17.0
           cache-from: type=gha
           cache-to: type=gha,mode=max
